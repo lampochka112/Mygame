@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сапёр с темами</title>
+    <style>
+        :root {
+            --bg-color: #f0f0f0;
+            --text-color: #333;
+            --cell-color: #ccc;
+            --cell-hover: #ddd;
+            --revealed-color: #e0e0e0;
+            --mine-color: #ff6b6b;
+            --flag-color: #ffd166;
+            --question-color: #a0c4ff;
+            --board-bg: #999;
+            --button-bg: #4CAF50;
+            --button-hover: #45a049;
+        }
+
+        .dark-theme {
+            --bg-color: #222;
+            --text-color: #eee;
+            --cell-color: #444;
+            --cell-hover: #555;
+            --revealed-color: #333;
+            --mine-color: #d33636;
+            --flag-color: #d4a017;
+            --question-color: #4a6fa5;
+            --board-bg: #666;
+            --button-bg: #388E3C;
+            --button-hover: #2E7D32;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            touch-action: manipulation;
+            transition: all 0.3s ease;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 300px;
+            margin-bottom: 10px;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(10, 30px);
+            grid-gap: 2px;
+            background-color: var(--board-bg);
+            padding: 5px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.2);
+            user-select: none;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: var(--cell-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .cell:hover {
+            background-color: var(--cell-hover);
+        }
+
+        .cell.revealed {
+            background-color: var(--revealed-color);
+            cursor: default;
+        }
+
+        .cell.revealed:hover {
+            background-color: var(--revealed-color);
+        }
+
+        .cell.mine {
+            background-color: var(--mine-color);
+        }
+
+        .cell.flagged {
+            background-color: var(--flag-color);
+        }
+
+        .cell.question {
+            background-color: var(--question-color);
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 15px;
+            background-color: var(--button-bg);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: var(--button-hover);
+        }
+
+        .theme-switcher {
+            background-color: transparent;
+            border: 2px solid var(--button-bg);
+            color: var(--text-color);
+        }
+
+        .instructions {
+            margin-top: 20px;
+            max-width: 300px;
+            text-align: center;
+            color: var(--text-color);
+        }
+
+        .number-1 { color: blue; }
+        .number-2 { color: green; }
+        .number-3 { color: red; }
+        .number-4 { color: darkblue; }
+        .number-5 { color: brown; }
+        .number-6 { color: teal; }
+        .number-7 { color: black; }
+        .number-8 { color: gray; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Сапёр с темами</h1>
+        <button id="theme-btn" class="theme-switcher">Тёмная</button>
+    </div>
+    <div class="game-info">
+        <div>Мины: <span id="mines-count">15</span></div>
+        <div>Флаги: <span id="flags-count">0</span></div>
+    </div>
+    <div class="board" id="board"></div>
+    <div class="controls">
+        <button id="restart-btn">Новая игра</button>
+    </div>
+    <div class="instructions">
+        ЛКМ - открыть клетку<br>
+        ПКМ - поставить флажок<br>
+        (на телефоне - долгое нажатие)
+    </div>
+
+    <script>
+        // Конфигурация игры
+        const config = {
+            rows: 10,
+            cols: 10,
+            mines: 15
+        };
+
+        // Состояние игры
+        let board = [];
+        let revealedCount = 0;
+        let flaggedCount = 0;
+        let gameOver = false;
+        let firstClick = true;
+        let darkTheme = false;
+
+        // Элементы DOM
+        const boardElement = document.getElementById('board');
+        const minesCountElement = document.getElementById('mines-count');
+        const flagsCountElement = document.getElementById('flags-count');
+        const restartBtn = document.getElementById('restart-btn');
+        const themeBtn = document.getElementById('theme-btn');
+
+        // Инициализация игры
+        function initGame() {
+            board = [];
+            revealedCount = 0;
+            flaggedCount = 0;
+            gameOver = false;
+            firstClick = true;
+            minesCountElement.textContent = config.mines;
+            flagsCountElement.textContent = '0';
+            
+            // Создаем пустую доску
+            for (let i = 0; i < config.rows; i++) {
+                board[i] = [];
+                for (let j = 0; j < config.cols; j++) {
+                    board[i][j] = {
+                        isMine: false,
+                        revealed: false,
+                        flagged: false,
+                        question: false,
+                        neighborMines: 0
+                    };
+                }
+            }
+            
+            // Отрисовываем доску
+            renderBoard();
+        }
+
+        // Размещение мин (после первого клика)
+        function placeMines(firstRow, firstCol) {
+            let minesPlaced = 0;
+            while (minesPlaced < config.mines) {
+                const row = Math.floor(Math.random() * config.rows);
+                const col = Math.floor(Math.random() * config.cols);
+                
+                // Гарантируем, что первая открытая клетка и вокруг нее не будут минами
+                const isNearFirstClick = Math.abs(row - firstRow) <= 1 && Math.abs(col - firstCol) <= 1;
+                
+                if (!board[row][col].isMine && !isNearFirstClick) {
+                    board[row][col].isMine = true;
+                    minesPlaced++;
+                }
+            }
+            
+            // Считаем соседние мины для каждой клетки
+            calculateNeighbors();
+        }
+
+        // Подсчет соседних мин
+        function calculateNeighbors() {
+            for (let i = 0; i < config.rows; i++) {
+                for (let j = 0; j < config.cols; j++) {
+                    if (!board[i][j].isMine) {
+                        let count = 0;
+                        
+                        // Проверяем все 8 соседних клеток
+                        for (let di = -1; di <= 1; di++) {
+                            for (let dj = -1; dj <= 1; dj++) {
+                                if (di === 0 && dj === 0) continue;
+                                
+                                const ni = i + di;
+                                const nj = j + dj;
+                                
+                                if (ni >= 0 && ni < config.rows && nj >= 0 && nj < config.cols) {
+                                    if (board[ni][nj].isMine) {
+                                        count++;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        board[i][j].neighborMines = count;
+                    }
+                }
+            }
+        }
+
+        // Отрисовка доски
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            boardElement.style.gridTemplateColumns = `repeat(${config.cols}, 30px)`;
+            
+            for (let i = 0; i < config.rows; i++) {
+                for (let j = 0; j < config.cols; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.row = i;
+                    cell.dataset.col = j;
+                    
+                    if (board[i][j].revealed) {
+                        cell.classList.add('revealed');
+                        if (board[i][j].isMine) {
+                            cell.classList.add('mine');
+                            cell.textContent = '💣';
+                        } else if (board[i][j].neighborMines > 0) {
+                            cell.textContent = board[i][j].neighborMines;
+                            cell.classList.add(`number-${board[i][j].neighborMines}`);
+                        }
+                    } else if (board[i][j].flagged) {
+                        cell.classList.add('flagged');
+                        cell.textContent = '🚩';
+                    } else if (board[i][j].question) {
+                        cell.classList.add('question');
+                        cell.textContent = '?';
+                    }
+                    
+                    // Обработчики событий
+                    cell.addEventListener('click', () => handleCellClick(i, j));
+                    cell.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        handleRightClick(i, j);
+                    });
+                    
+                    // Для мобильных устройств
+                    cell.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.touchTimer = setTimeout(() => {
+                            handleRightClick(i, j);
+                        }, 500); // Долгое нажатие для флажка
+                    }, {passive: false});
+                    
+                    cell.addEventListener('touchend', (e) => {
+                        e.preventDefault();
+                        clearTimeout(this.touchTimer);
+                    }, {passive: false});
+                    
+                    cell.addEventListener('touchmove', (e) => {
+                        e.preventDefault();
+                        clearTimeout(this.touchTimer);
+                    }, {passive: false});
+                    
+                    boardElement.appendChild(cell);
+                }
+            }
+        }
+
+        // Обработка клика по клетке
+        function handleCellClick(row, col) {
+            if (gameOver || board[row][col].flagged || board[row][col].revealed) return;
+            
+            // При первом клике размещаем мины (чтобы первая клетка никогда не была миной)
+            if (firstClick) {
+                placeMines(row, col);
+                firstClick = false;
+            }
+            
+            board[row][col].revealed = true;
+            revealedCount++;
+            
+            if (board[row][col].isMine) {
+                // Игрок наступил на мину
+                gameOver = true;
+                revealAllMines();
+                setTimeout(() => alert('Игра окончена! Вы проиграли.'), 10);
+            } else if (board[row][col].neighborMines === 0) {
+                // Если пустая клетка, открываем соседей рекурсивно
+                revealNeighbors(row, col);
+            }
+            
+            // Проверка победы
+            if (revealedCount === config.rows * config.cols - config.mines) {
+                gameOver = true;
+                flagAllMines();
+                setTimeout(() => alert('Поздравляем! Вы победили!'), 10);
+            }
+            
+            renderBoard();
+        }
+
+        // Обработка правого клика (флажок/вопрос/снять)
+        function handleRightClick(row, col) {
+            if (gameOver || board[row][col].revealed) return;
+            
+            // Цикл: нет отметки → флажок → вопрос → нет отметки
+            if (!board[row][col].flagged && !board[row][col].question) {
+                // Ставим флажок
+                board[row][col].flagged = true;
+                flaggedCount++;
+            } else if (board[row][col].flagged) {
+                // Меняем флажок на вопрос
+                board[row][col].flagged = false;
+                board[row][col].question = true;
+                flaggedCount--;
+            } else {
+                // Убираем вопрос
+                board[row][col].question = false;
+            }
+            
+            flagsCountElement.textContent = flaggedCount;
+            renderBoard();
+        }
+
+        // Рекурсивное открытие соседних клеток
+        function revealNeighbors(row, col) {
+            for (let di = -1; di <= 1; di++) {
+                for (let dj = -1; dj <= 1; dj++) {
+                    if (di === 0 && dj === 0) continue;
+                    
+                    const ni = row + di;
+                    const nj = col + dj;
+                    
+                    if (ni >= 0 && ni < config.rows && nj >= 0 && nj < config.cols) {
+                        if (!board[ni][nj].revealed && !board[ni][nj].flagged) {
+                            board[ni][nj].revealed = true;
+                            revealedCount++;
+                            
+                            if (board[ni][nj].neighborMines === 0) {
+                                revealNeighbors(ni, nj);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Показать все мины при проигрыше
+        function revealAllMines() {
+            for (let i = 0; i < config.rows; i++) {
+                for (let j = 0; j < config.cols; j++) {
+                    if (board[i][j].isMine) {
+                        board[i][j].revealed = true;
+                    }
+                }
+            }
+        }
+
+        // Пометить все мины флажками при победе
+        function flagAllMines() {
+            for (let i = 0; i < config.rows; i++) {
+                for (let j = 0; j < config.cols; j++) {
+                    if (board[i][j].isMine && !board[i][j].flagged) {
+                        board[i][j].flagged = true;
+                        flaggedCount++;
+                    }
+                }
+            }
+            flagsCountElement.textContent = flaggedCount;
+        }
+
+        // Переключение темы
+        function toggleTheme() {
+            darkTheme = !darkTheme;
+            if (darkTheme) {
+                document.body.classList.add('dark-theme');
+                themeBtn.textContent = 'Светлая';
+            } else {
+                document.body.classList.remove('dark-theme');
+                themeBtn.textContent = 'Тёмная';
+            }
+        }
+
+        // Начало игры
+        restartBtn.addEventListener('click', initGame);
+        themeBtn.addEventListener('click', toggleTheme);
+        
+        // Запрещаем контекстное меню на всем поле
+        boardElement.addEventListener('contextmenu', (e) => e.preventDefault());
+        
+        initGame();
+    </script>
+</body>
+</html>
